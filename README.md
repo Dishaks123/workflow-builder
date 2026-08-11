@@ -1,16 +1,12 @@
-# AI Agent Workflow Builder
+AI Agent Workflow Builder
+A full-stack AI Agent Workflow Builder built with Nhost, Hasura, PostgreSQL, GraphQL, Next.js, React, TypeScript, Docker, and Nhost Functions. The application allows users within organizations to create and execute multi-step AI workflows with role-based access control, quota management, approval gates, and real-time execution updates.
 
-A full-stack AI Agent Workflow Builder built with **Nhost, Hasura, PostgreSQL, GraphQL, Next.js, React, TypeScript, Docker, and Nhost Functions**. The application allows users within organizations to create and execute multi-step AI workflows with role-based access control, quota management, approval gates, and real-time execution updates.
+Tech Stack
+Frontend: Next.js 16, React 19, TypeScript, Nhost SDK, GraphQL/WebSocket
+Backend: Nhost, Hasura GraphQL Engine, PostgreSQL, Nhost Functions, Hasura Actions
+Infrastructure: Docker, Nhost CLI, GitHub
 
-## Tech Stack
-
-**Frontend:** Next.js 16, React 19, TypeScript, Nhost SDK, GraphQL/WebSocket  
-**Backend:** Nhost, Hasura GraphQL Engine, PostgreSQL, Nhost Functions, Hasura Actions  
-**Infrastructure:** Docker, Nhost CLI, GitHub
-
-## Architecture
-
-```text
+Architecture
 Next.js / React
       |
       | Authentication + GraphQL
