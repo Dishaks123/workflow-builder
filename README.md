@@ -1,210 +1,483 @@
-AI Agent Workflow Builder
-A full-stack AI Agent Workflow Builder built with Nhost, Hasura, PostgreSQL, GraphQL, Next.js, React, TypeScript, Docker, and Nhost Functions. The application allows users within organizations to create and execute multi-step AI workflows with role-based access control, quota management, approval gates, and real-time execution updates.
+# AI Agent Workflow Builder
 
-Tech Stack
-Frontend: Next.js 16, React 19, TypeScript, Nhost SDK, GraphQL/WebSocket
-Backend: Nhost, Hasura GraphQL Engine, PostgreSQL, Nhost Functions, Hasura Actions
-Infrastructure: Docker, Nhost CLI, GitHub
+A full-stack **AI Agent Workflow Builder** built using **Next.js, React, TypeScript, Nhost, Hasura, PostgreSQL, GraphQL, Docker, and Nhost Functions**.
 
-Architecture
-Next.js / React
-      |
-      | Authentication + GraphQL
-      v
-Nhost / Hasura
-      |
-      +---- PostgreSQL
-      |
-      +---- Hasura Actions
-      |         |
-      |         +---- triggerWorkflowRun
-      |         +---- approveStep
-      |
-      +---- GraphQL Subscriptions
-                |
-                v
-          Live step status
+The application enables organizations to create, execute, and monitor multi-step AI workflows with **role-based access control (RBAC), approval gates, quota management, and real-time execution updates**.
 
-Database Model
+---
+
+# Live Demo
+
+🔗 https://workflow-builder-black-tau.vercel.app
+
+---
+
+# Features
+
+- Organization-based authentication
+- Role-Based Access Control (Owner, Editor, Viewer)
+- Multi-step AI workflow execution
+- LLM-powered workflow steps
+- HTTP API integration
+- Conditional branching
+- Human approval gates
+- Database write operations
+- Notification steps
+- Workflow quota management
+- Real-time workflow monitoring using GraphQL Subscriptions
+- Secure organization-level data isolation
+
+---
+
+# Tech Stack
+
+## Frontend
+
+- Next.js 16
+- React 19
+- TypeScript
+- Nhost SDK
+- GraphQL
+- GraphQL WebSocket
+
+## Backend
+
+- Nhost
+- Hasura GraphQL Engine
+- PostgreSQL
+- Nhost Functions
+- Hasura Actions
+
+## Infrastructure
+
+- Docker
+- Nhost CLI
+- GitHub
+
+---
+
+# System Architecture
+
+```mermaid
+flowchart TD
+
+A[Next.js / React Frontend]
+--> B[Nhost Authentication]
+
+B --> C[Hasura GraphQL Engine]
+
+C --> D[PostgreSQL]
+
+C --> E[Nhost Functions]
+
+E --> F[Workflow Execution]
+
+F --> G[GraphQL Subscriptions]
+
+G --> H[Real-Time UI Updates]
+```
+
+---
+
+# Database Schema
+
+```
 organizations
-      |
-      +---- org_members
-      |
-      +---- workflows
-                |
-                +---- workflow_steps
-                +---- workflow_triggers
-                +---- workflow_runs
-                          |
-                          +---- step_runs
+│
+├── org_members
+│
+├── workflows
+│
+├── workflow_steps
+│
+├── workflow_triggers
+│
+├── workflow_runs
+│
+└── step_runs
+```
 
-The main tables are organizations, org_members, workflows, workflow_steps, workflow_triggers, workflow_runs, and step_runs. Workflow runs support states including running, paused, completed, and failed. Step runs store status, input, output, errors, attempt count, and approval information.
+## Tables
 
-Workflow Steps
+### organizations
 
-The workflow interface supports:
+Stores organization details.
 
-llm_call — performs an LLM request.
-http_request — calls an external HTTP API.
-conditional_branch — makes a decision based on previous output.
-approval_gate — pauses execution until an authorized user approves.
-db_write — database-writing step.
-notify — notification step.
-Authorization
+### org_members
 
-The application uses organization membership and roles:
+Stores organization members and their assigned roles.
 
-Owner: Full workflow and organization control.
-Editor: Can create/edit workflows and trigger executions but cannot manage members.
-Viewer: Read-only access and cannot trigger or approve workflows.
+### workflows
 
-Authorization is scoped to the user's organization so that a user from Organization B cannot access Organization A's workflows simply by knowing or guessing an ID.
+Stores workflow definitions.
 
-Workflow Execution
+### workflow_steps
 
-The main execution flow is:
+Stores each step belonging to a workflow.
 
+### workflow_triggers
+
+Stores workflow trigger configuration.
+
+### workflow_runs
+
+Stores execution history.
+
+Supported states:
+
+- Running
+- Paused
+- Completed
+- Failed
+
+### step_runs
+
+Stores execution details for every workflow step including:
+
+- Status
+- Input
+- Output
+- Error message
+- Attempt count
+- Approval metadata
+
+---
+
+# Supported Workflow Steps
+
+| Step | Description |
+|-------|-------------|
+| LLM Call | Executes an AI/LLM request |
+| HTTP Request | Calls an external REST API |
+| Conditional Branch | Executes conditional logic |
+| Approval Gate | Waits for authorized user approval |
+| Database Write | Stores workflow data |
+| Notify | Sends notifications |
+
+---
+
+# Authorization
+
+The application uses **Role-Based Access Control (RBAC)**.
+
+## Owner
+
+- Full organization management
+- Manage users
+- Create/Edit/Delete workflows
+- Execute workflows
+- Approve workflow steps
+
+## Editor
+
+- Create workflows
+- Edit workflows
+- Execute workflows
+
+Cannot:
+
+- Manage organization members
+
+## Viewer
+
+- View workflows
+- Monitor executions
+
+Cannot:
+
+- Execute workflows
+- Approve workflows
+- Modify workflows
+
+---
+
+# Organization Isolation
+
+All workflow data is scoped to the authenticated user's organization.
+
+Users from one organization **cannot access** workflows belonging to another organization even if they know the workflow ID.
+
+---
+
+# Workflow Execution
+
+```text
 User
- ↓
-Next.js
- ↓
+    │
+    ▼
+Next.js Frontend
+    │
+    ▼
 Hasura Action
- ↓
-Authentication / Organization / Role Check
- ↓
+    │
+    ▼
+Authentication
+    │
+    ▼
+Organization Validation
+    │
+    ▼
+Role Validation
+    │
+    ▼
 Quota Check
- ↓
-workflow_run
- ↓
-LLM → HTTP → Conditional → Approval
- ↓
-Paused
- ↓
-Approval
- ↓
-Workflow Completed
-
-triggerWorkflowRun verifies the authenticated user, organization membership, role, and quota before creating and executing a workflow run. approveStep validates the approver before allowing a paused workflow to continue.
-
+    │
+    ▼
+Create workflow_run
+    │
+    ▼
+Execute Workflow
+    │
+    ▼
+LLM Call
+    │
+    ▼
+HTTP Request
+    │
+    ▼
+Conditional Branch
+    │
+    ▼
 Approval Gate
+    │
+    ▼
+Workflow Completed
+```
 
-When execution reaches an approval_gate, the workflow changes to:
+The `triggerWorkflowRun` function validates:
 
-paused
+- Authenticated user
+- Organization membership
+- User role
+- Available quota
 
-The frontend displays:
+before creating a workflow execution.
 
-Paused — awaiting approval
+The `approveStep` function validates the approver before resuming paused workflows.
 
-An authorized user can approve the step, after which execution resumes and can reach:
+---
 
-Workflow completed
-Real-Time Updates
+# Approval Gate
 
-The frontend subscribes to step_runs using a GraphQL WebSocket filtered by workflow_run_id.
+When execution reaches an approval step:
 
+```
+Running
+        ↓
+Paused
+        ↓
+Awaiting Approval
+        ↓
+Approved
+        ↓
+Workflow Continues
+```
+
+Only authorized users can approve paused workflow steps.
+
+---
+
+# Real-Time Updates
+
+Workflow execution status is streamed using **GraphQL Subscriptions**.
+
+```
 Workflow Function
-       ↓
+        │
+        ▼
 PostgreSQL
-       ↓
+        │
+        ▼
 Hasura
-       ↓
-GraphQL WebSocket
-       ↓
-Next.js / React
-       ↓
-Live UI
+        │
+        ▼
+GraphQL Subscription
+        │
+        ▼
+Next.js Frontend
+        │
+        ▼
+Live Workflow Status
+```
 
-The subscription was tested successfully and the browser received multiple live step_runs messages during workflow execution.
+The frontend receives workflow updates instantly without refreshing the page.
 
-Tested End-to-End Scenario
+---
 
-The tested workflow, Milestone 3 Workflow, contains:
+# Tested End-to-End Workflow
+
+The tested workflow contains:
 
 1. LLM Call
 2. HTTP Request
 3. Conditional Branch
 4. Approval Gate
 
-The complete tested flow is:
+Execution Flow
 
+```
 Login
- ↓
+    ↓
 Run Workflow
- ↓
+    ↓
 LLM Call
- ↓
+    ↓
 HTTP Request
- ↓
+    ↓
 Conditional Branch
- ↓
+    ↓
 Approval Gate
- ↓
-Paused — awaiting approval
- ↓
-Approve Workflow
- ↓
+    ↓
+Paused
+    ↓
+Approval
+    ↓
 Workflow Completed
+```
 
-The application successfully generated workflow Run IDs, updated quota usage, paused at the approval gate, resumed after approval, completed execution, and received live GraphQL subscription events.
+Verified successfully:
 
-Local Setup
-Prerequisites
-Node.js
-npm
-Docker Desktop
-WSL (Windows)
-Nhost CLI
-Git
-Clone
+- Workflow Run creation
+- Quota updates
+- Approval pause/resume
+- Live GraphQL subscription events
+- Successful workflow completion
+
+---
+
+# Local Setup
+
+## Prerequisites
+
+- Node.js
+- npm
+- Docker Desktop
+- WSL (Windows)
+- Nhost CLI
+- Git
+
+---
+
+## Clone Repository
+
+```bash
 git clone https://github.com/Dishaks123/workflow-builder.git
+
 cd workflow-builder
-Start Nhost
+```
+
+---
+
+## Start Nhost
+
+```bash
 nhost up
+```
 
 Verify services:
 
+```bash
 docker ps
-Start Frontend
+```
+
+---
+
+## Start Frontend
+
+```bash
 cd frontend
+
 npm install
+
 npm run dev
+```
 
 Open:
 
+```
 http://localhost:3000
-Production Build
+```
+
+---
+
+## Production Build
+
+```bash
 npm run build
-Project Structure
+```
+
+---
+
+# Project Structure
+
+```text
 workflow-builder/
+│
 ├── frontend/
 │   └── app/
+│
 ├── functions/
 │   ├── triggerWorkflowRun.ts
 │   └── approveStep.ts
+│
 ├── nhost/
 │   ├── metadata/
 │   └── migrations/
+│
 ├── .gitignore
+│
 └── README.md
-Security
+```
 
-Local secrets and generated files are excluded from Git using .gitignore.
+---
 
-Sensitive files such as .nhost, .secrets, .env, node_modules, and .next are not committed.
+# Security
 
-Repository
+Sensitive files are excluded from Git using `.gitignore`.
 
-GitHub: https://github.com/Dishaks123/workflow-builder
+Ignored files include:
 
-Project Goal
+- .env
+- .nhost
+- .secrets
+- node_modules
+- .next
 
-This project demonstrates a full-stack AI workflow system using Nhost + Hasura + PostgreSQL + GraphQL + Next.js, with organization-based authorization, workflow execution, human approval gates, quota management, and real-time workflow monitoring.
+No secrets or generated files are committed to the repository.
 
+---
 
-Then run:
+# Future Enhancements
 
-```bash
-git add README.md
-git commit -m "Add README documentation"
-git push
+- Drag-and-drop workflow editor
+- Workflow templates
+- AI model selection
+- Retry failed workflow steps
+- Scheduled workflow execution
+- Email and Slack notifications
+- Workflow versioning
+- Execution analytics dashboard
+
+---
+
+# Repository
+
+**GitHub**
+
+https://github.com/Dishaks123/workflow-builder
+
+---
+
+# Project Goal
+
+This project demonstrates a production-style AI workflow platform implementing:
+
+- Full-stack application development
+- Authentication and Authorization
+- Organization-based access control
+- Workflow orchestration
+- Human approval workflows
+- GraphQL subscriptions
+- PostgreSQL database design
+- Real-time execution monitoring
+- Secure backend validation using Nhost Functions
