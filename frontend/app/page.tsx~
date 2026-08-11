@@ -1,0 +1,937 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@nhost/nhost-js";
+
+const nhost = createClient({
+  subdomain: "local",
+  region: "local",
+});
+
+const WORKFLOW_ID =
+  "b5fb1dd1-3cc7-4df1-a2a4-b8e1de110658";
+
+type StepType = {
+  type: string;
+  label: string;
+};
+
+const stepTypes: StepType[] = [
+  {
+    type: "llm_call",
+    label: "LLM Call",
+  },
+  {
+    type: "http_request",
+    label: "HTTP Request",
+  },
+  {
+    type: "conditional_branch",
+    label: "Conditional Branch",
+  },
+  {
+    type: "approval_gate",
+    label: "Approval Gate",
+  },
+  {
+    type: "db_write",
+    label: "DB Write",
+  },
+  {
+    type: "notify",
+    label: "Notify",
+  },
+];
+
+export default function Home() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+
+  const [loginStatus, setLoginStatus] = useState("");
+
+  const [workflowName, setWorkflowName] =
+    useState("Milestone 3 Workflow");
+
+  const [selectedSteps, setSelectedSteps] =
+    useState<string[]>([
+      "llm_call",
+      "http_request",
+      "conditional_branch",
+      "approval_gate",
+    ]);
+
+  const [status, setStatus] =
+    useState("Ready");
+
+  const [runId, setRunId] =
+    useState("");
+
+  /*
+   * Check whether an Nhost session already exists.
+   */
+  useEffect(() => {
+    const session = nhost.getUserSession();
+
+    console.log(
+      "Nhost session:",
+      session ? "FOUND" : "NOT FOUND"
+    );
+
+    if (session) {
+      setLoggedIn(true);
+
+      setUserEmail(
+        session.user?.email || ""
+      );
+    }
+  }, []);
+
+  /*
+   * LOGIN
+   */
+  async function login() {
+    if (!email || !password) {
+      setLoginStatus(
+        "Please enter email and password"
+      );
+      return;
+    }
+
+    setLoginStatus("Logging in...");
+
+    try {
+      const response =
+        await nhost.auth.signInEmailPassword({
+          email,
+          password,
+        });
+
+      console.log(
+        "Nhost login response:",
+        response
+      );
+
+      const session =
+        response.body?.session;
+
+      if (!session) {
+        setLoginStatus(
+          "Login failed: no session received"
+        );
+        return;
+      }
+
+      setLoggedIn(true);
+
+      setUserEmail(
+        session.user?.email || email
+      );
+
+      setLoginStatus("");
+
+      setStatus("Ready");
+
+      console.log(
+        "Login successful:",
+        session.user?.email
+      );
+
+      console.log(
+        "Stored session:",
+        !!nhost.getUserSession()
+      );
+    } catch (error: any) {
+      console.error(
+        "Login error:",
+        error
+      );
+
+      setLoginStatus(
+        error?.body?.message ||
+          error?.message ||
+          "Login failed"
+      );
+    }
+  }
+
+  /*
+   * LOGOUT
+   */
+  async function logout() {
+    try {
+      await nhost.auth.signOut();
+    } catch (error) {
+      console.error(
+        "Logout error:",
+        error
+      );
+    }
+
+    nhost.clearSession();
+
+    setLoggedIn(false);
+    setUserEmail("");
+    setEmail("");
+    setPassword("");
+    setLoginStatus("");
+    setStatus("Ready");
+    setRunId("");
+  }
+
+  /*
+   * RUN WORKFLOW
+   */
+  async function runWorkflow() {
+    setRunId("");
+
+    /*
+     * Get the current Nhost session.
+     */
+    const session =
+      nhost.getUserSession();
+
+    if (!session) {
+      setStatus(
+        "Please login first"
+      );
+
+      setLoggedIn(false);
+
+      return;
+    }
+
+    setLoggedIn(true);
+
+    setUserEmail(
+      session.user?.email || ""
+    );
+
+    setStatus(
+      "Starting workflow..."
+    );
+
+    console.log(
+      "Authenticated user:",
+      session.user?.email
+    );
+
+    console.log(
+      "Workflow ID:",
+      WORKFLOW_ID
+    );
+
+    try {
+      /*
+       * IMPORTANT:
+       *
+       * The Nhost SDK automatically attaches
+       * the current access token to this request.
+       *
+       * The function server expects:
+       *
+       * {
+       *   input: {
+       *     workflow_id: "..."
+       *   }
+       * }
+       */
+      const response =
+        await nhost.functions.post(
+          "/triggerWorkflowRun",
+          {
+            input: {
+              workflow_id:
+                WORKFLOW_ID,
+            },
+          }
+        );
+
+      console.log(
+        "Workflow response:",
+        response
+      );
+
+      const data: any =
+        response.body;
+
+      console.log(
+        "Workflow response body:",
+        data
+      );
+
+      if (data?.run_id) {
+        setRunId(
+          data.run_id
+        );
+      }
+
+      if (
+        data?.status ===
+        "paused"
+      ) {
+        setStatus(
+          "Paused — awaiting approval"
+        );
+
+        return;
+      }
+
+      if (
+        data?.status ===
+        "failed"
+      ) {
+        setStatus(
+          data.message ||
+            "Workflow failed"
+        );
+
+        return;
+      }
+
+      if (data?.status) {
+        setStatus(
+          `Workflow ${data.status}`
+        );
+
+        return;
+      }
+
+      if (data?.success) {
+        setStatus(
+          data.message ||
+            "Workflow started successfully"
+        );
+
+        return;
+      }
+
+      setStatus(
+        data?.message ||
+          "Workflow completed"
+      );
+    } catch (error: any) {
+      console.error(
+        "Workflow error:",
+        error
+      );
+
+      let message =
+        "Workflow request failed";
+
+      if (
+        error?.body?.message
+      ) {
+        message =
+          error.body.message;
+      } else if (
+        error?.message
+      ) {
+        message =
+          error.message;
+      } else if (
+        error?.body?.error?.message
+      ) {
+        message =
+          error.body.error.message;
+      }
+
+      if (
+        error?.status === 401
+      ) {
+        message =
+          "Authentication expired. Please login again.";
+      }
+
+      setStatus(message);
+    }
+  }
+
+  /*
+   * ADD STEP
+   */
+  function addStep(
+    type: string
+  ) {
+    setSelectedSteps([
+      ...selectedSteps,
+      type,
+    ]);
+  }
+
+  /*
+   * REMOVE STEP
+   */
+  function removeStep(
+    index: number
+  ) {
+    setSelectedSteps(
+      selectedSteps.filter(
+        (_, i) =>
+          i !== index
+      )
+    );
+  }
+
+  /*
+   * LOGIN SCREEN
+   */
+  if (!loggedIn) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          background: "#0f172a",
+          color: "white",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily:
+            "Arial, sans-serif",
+        }}
+      >
+        <section
+          style={{
+            width: "380px",
+            background: "#1e293b",
+            padding: "30px",
+            borderRadius: "12px",
+          }}
+        >
+          <h1>
+            AI Agent Workflow Builder
+          </h1>
+
+          <p
+            style={{
+              color: "#94a3b8",
+            }}
+          >
+            Login to continue
+          </p>
+
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) =>
+              setEmail(
+                e.target.value
+              )
+            }
+            style={{
+              width: "100%",
+              padding: "12px",
+              marginTop: "15px",
+              boxSizing:
+                "border-box",
+              background:
+                "#0f172a",
+              color: "white",
+              border:
+                "1px solid #475569",
+              borderRadius:
+                "6px",
+            }}
+          />
+
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) =>
+              setPassword(
+                e.target.value
+              )
+            }
+            style={{
+              width: "100%",
+              padding: "12px",
+              marginTop: "12px",
+              boxSizing:
+                "border-box",
+              background:
+                "#0f172a",
+              color: "white",
+              border:
+                "1px solid #475569",
+              borderRadius:
+                "6px",
+            }}
+          />
+
+          <button
+            onClick={login}
+            style={{
+              width: "100%",
+              padding: "13px",
+              marginTop: "18px",
+              background:
+                "#2563eb",
+              color: "white",
+              border: "none",
+              borderRadius: "7px",
+              cursor:
+                "pointer",
+              fontWeight:
+                "bold",
+            }}
+          >
+            Login
+          </button>
+
+          {loginStatus && (
+            <p
+              style={{
+                color:
+                  "#ef4444",
+                marginTop:
+                  "15px",
+              }}
+            >
+              {loginStatus}
+            </p>
+          )}
+        </section>
+      </main>
+    );
+  }
+
+  /*
+   * MAIN WORKFLOW SCREEN
+   */
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#0f172a",
+        color: "white",
+        padding: "30px",
+        fontFamily:
+          "Arial, sans-serif",
+        boxSizing:
+          "border-box",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent:
+            "space-between",
+          alignItems:
+            "center",
+        }}
+      >
+        <div>
+          <h1>
+            AI Agent Workflow Builder
+          </h1>
+
+          <p
+            style={{
+              color:
+                "#94a3b8",
+              marginTop:
+                "5px",
+            }}
+          >
+            Build and execute
+            AI-powered
+            workflows
+          </p>
+        </div>
+
+        <div>
+          <span
+            style={{
+              marginRight:
+                "15px",
+              color:
+                "#22c55e",
+            }}
+          >
+            {userEmail}
+          </span>
+
+          <button
+            onClick={logout}
+            style={{
+              padding:
+                "9px 14px",
+              background:
+                "#ef4444",
+              color: "white",
+              border: "none",
+              borderRadius:
+                "6px",
+              cursor:
+                "pointer",
+            }}
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "240px 1fr 280px",
+          gap: "20px",
+          marginTop:
+            "30px",
+        }}
+      >
+        {/* STEP TYPES */}
+
+        <section
+          style={{
+            background:
+              "#1e293b",
+            padding:
+              "20px",
+            borderRadius:
+              "10px",
+          }}
+        >
+          <h2>
+            Step Types
+          </h2>
+
+          {stepTypes.map(
+            (step) => (
+              <button
+                key={
+                  step.type
+                }
+                onClick={() =>
+                  addStep(
+                    step.type
+                  )
+                }
+                style={{
+                  width:
+                    "100%",
+                  padding:
+                    "12px",
+                  marginTop:
+                    "10px",
+                  background:
+                    "#334155",
+                  color:
+                    "white",
+                  border:
+                    "none",
+                  borderRadius:
+                    "6px",
+                  cursor:
+                    "pointer",
+                  textAlign:
+                    "left",
+                  fontSize:
+                    "16px",
+                }}
+              >
+                +{" "}
+                {step.label}
+              </button>
+            )
+          )}
+        </section>
+
+        {/* WORKFLOW */}
+
+        <section
+          style={{
+            background:
+              "#1e293b",
+            padding:
+              "20px",
+            borderRadius:
+              "10px",
+          }}
+        >
+          <h2>
+            Workflow
+          </h2>
+
+          <input
+            value={
+              workflowName
+            }
+            onChange={(e) =>
+              setWorkflowName(
+                e.target.value
+              )
+            }
+            style={{
+              width:
+                "100%",
+              padding:
+                "12px",
+              marginBottom:
+                "20px",
+              background:
+                "#0f172a",
+              color:
+                "white",
+              border:
+                "1px solid #475569",
+              borderRadius:
+                "6px",
+              boxSizing:
+                "border-box",
+              fontSize:
+                "16px",
+            }}
+          />
+
+          {selectedSteps.map(
+            (
+              type,
+              index
+            ) => {
+              const step =
+                stepTypes.find(
+                  (item) =>
+                    item.type ===
+                    type
+                );
+
+              return (
+                <div
+                  key={index}
+                  style={{
+                    background:
+                      "#334155",
+                    padding:
+                      "15px",
+                    marginBottom:
+                      "10px",
+                    borderRadius:
+                      "8px",
+                    display:
+                      "flex",
+                    justifyContent:
+                      "space-between",
+                    alignItems:
+                      "center",
+                  }}
+                >
+                  <div>
+                    <strong
+                      style={{
+                        fontSize:
+                          "18px",
+                      }}
+                    >
+                      {index +
+                        1}
+                      .{" "}
+                      {
+                        step?.label
+                      }
+                    </strong>
+
+                    <div
+                      style={{
+                        fontSize:
+                          "12px",
+                        color:
+                          "#94a3b8",
+                        marginTop:
+                          "5px",
+                      }}
+                    >
+                      {
+                        type
+                      }
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      removeStep(
+                        index
+                      )
+                    }
+                    style={{
+                      background:
+                        "#ef4444",
+                      color:
+                        "white",
+                      border:
+                        "none",
+                      padding:
+                        "8px 12px",
+                      borderRadius:
+                        "5px",
+                      cursor:
+                        "pointer",
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              );
+            }
+          )}
+        </section>
+
+        {/* EXECUTION */}
+
+        <section
+          style={{
+            background:
+              "#1e293b",
+            padding:
+              "20px",
+            borderRadius:
+              "10px",
+          }}
+        >
+          <h2>
+            Execution
+          </h2>
+
+          <button
+            onClick={
+              runWorkflow
+            }
+            style={{
+              width:
+                "100%",
+              padding:
+                "14px",
+              background:
+                "#2563eb",
+              color:
+                "white",
+              border:
+                "none",
+              borderRadius:
+                "7px",
+              cursor:
+                "pointer",
+              fontSize:
+                "16px",
+              fontWeight:
+                "bold",
+            }}
+          >
+            ▶ Run Workflow
+          </button>
+
+          <div
+            style={{
+              marginTop:
+                "20px",
+              padding:
+                "15px",
+              background:
+                "#0f172a",
+              borderRadius:
+                "7px",
+            }}
+          >
+            <strong>
+              Status
+            </strong>
+
+            <p
+              style={{
+                color:
+                  status
+                    .toLowerCase()
+                    .includes(
+                      "failed"
+                    ) ||
+                  status
+                    .toLowerCase()
+                    .includes(
+                      "unable"
+                    ) ||
+                  status
+                    .toLowerCase()
+                    .includes(
+                      "error"
+                    ) ||
+                  status
+                    .toLowerCase()
+                    .includes(
+                      "required"
+                    ) ||
+                  status
+                    .toLowerCase()
+                    .includes(
+                      "authentication"
+                    )
+                    ? "#ef4444"
+                    : "#22c55e",
+              }}
+            >
+              {status}
+            </p>
+          </div>
+
+          {runId && (
+            <div
+              style={{
+                marginTop:
+                  "15px",
+                padding:
+                  "15px",
+                background:
+                  "#0f172a",
+                borderRadius:
+                  "7px",
+                fontSize:
+                  "12px",
+                wordBreak:
+                  "break-all",
+              }}
+            >
+              <strong>
+                Run ID
+              </strong>
+
+              <p
+                style={{
+                  color:
+                    "#94a3b8",
+                }}
+              >
+                {runId}
+              </p>
+            </div>
+          )}
+
+          <div
+            style={{
+              marginTop:
+                "20px",
+              padding:
+                "15px",
+              background:
+                "#0f172a",
+              borderRadius:
+                "7px",
+            }}
+          >
+            <strong>
+              Usage / Quota
+            </strong>
+
+            <p>
+              1 / 100 calls
+              used
+            </p>
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
