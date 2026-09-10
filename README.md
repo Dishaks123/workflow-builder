@@ -6,12 +6,6 @@ The application enables organizations to create, execute, and monitor multi-step
 
 ---
 
-# Live Demo
-
-🔗 https://workflow-builder-black-tau.vercel.app
-
----
-
 # Features
 
 - Organization-based authentication
